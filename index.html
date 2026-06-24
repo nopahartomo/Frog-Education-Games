@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GAME KATAK INTERAKTIF IPAS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;900&display=swap');
+
+        :root {
+            --bg-sky: #87CEEB;
+            --bg-water: #4FC3F7;
+            --dark-sky: #546E7A;
+            --dark-water: #29b6f6;
+        }
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #2c3e50;
+            overflow: hidden;
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        h1, h2, h3, .font-display {
+            font-family: 'Fredoka One', cursive;
+        }
+
+        /* Animations */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+        .animate-float-delay-1 { animation: float 3s ease-in-out 0.5s infinite; }
+        .animate-float-delay-2 { animation: float 3s ease-in-out 1s infinite; }
+
+        @keyframes bounce-soft {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .animate-bounce-soft { animation: bounce-soft 2s infinite; }
+
+        @keyframes jump {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(var(--jump-x), calc(var(--jump-y) - 50px)) scale(1.2); }
+            100% { transform: translate(var(--jump-x), var(--jump-y)) scale(1); }
+        }
+        .is-jumping {
+            animation: jump 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+            z-index: 50;
+        }
+
+        @keyframes fall {
+            0% { transform: translate(var(--jump-x), var(--jump-y)) scale(1) rotate(0deg); }
+            100% { transform: translate(var(--jump-x), calc(var(--jump-y) + 150px)) scale(0.5) rotate(180deg); opacity: 0; }
+        }
+        .is-falling {
+            animation: fall 0.8s ease-in forwards;
+        }
+
+        @keyframes rain {
+            0% { transform: translateY(-100px); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(100vh); opacity: 0; }
+        }
+        .rain-drop {
+            position: absolute;
+            width: 2px;
+            height: 15px;
+            background: rgba(255, 255, 255, 0.6);
+            animation: rain 0.7s linear infinite;
+        }
+
+        @keyframes splash {
+            0% { transform: scale(0); opacity: 1; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+        .splash-ring {
+            position: absolute;
+            border: 4px solid white;
+            border-radius: 50%;
+            animation: splash 0.6s ease-out forwards;
+        }
+
+        @keyframes pop-heart {
+            0% { transform: scale(0) translateY(0); opacity: 1; }
+            100% { transform: scale(1.5) translateY(-50px); opacity: 0; }
+        }
+        .heart-particle {
+            position: absolute;
+            color: #ff4757;
+            font-size: 24px;
+            animation: pop-heart 1s ease-out forwards;
+        }
+
+        /* Environments */
+        .env-normal {
+            background: linear-gradient(to bottom, var(--bg-sky) 0%, var(--bg-sky) 60%, var(--bg-water) 60%, var(--bg-water) 100%);
+            transition: background 1s ease;
+        }
+        .env-rainy {
+            background: linear-gradient(to bottom, var(--dark-sky) 0%, var(--dark-sky) 60%, var(--dark-water) 60%, var(--dark-water) 100%);
+            transition: background 1s ease;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.5); border-radius: 4px; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border: 4px solid white;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        
+        .answer-btn {
+            transition: all 0.2s;
+        }
+        .answer-btn:active {
+            transform: scale(0.95);
+        }
+        .answer-btn.correct { background-color: #2ed573 !important; color: white; border-color: #2ed573; box-shadow: 0 0 20px #2ed573;}
+        .answer-btn.wrong { background-color: #ff4757 !important; color: white; border-color: #ff4757;}
+
+        #game-container {
+            display: grid;
+            height: 100vh;
+            width: 100vw;
+            gap: 4px;
+            background: #1e272e;
+        }
+
+        .player-col {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border-left: 2px solid rgba(255,255,255,0.2);
+            border-right: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .frog-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 100px;
+            z-index: 20;
+            transition: transform 0.3s;
+        }
+
+        .lily-pad {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top:0; left:0; right:0; bottom:0;
+            background: rgba(0,0,0,0.8);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active { display: flex; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- AUDIO SYSTEM (Synthesized) -->
+    <script>
+        const AudioSys = {
+            ctx: null,
+            bgmOsc: null,
+            bgmGain: null,
+            isBgmPlaying: false,
+            bgmInterval: null,
+            
+            init: function() {
+                if(!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+            },
+            playTone: function(freq, type, duration, vol=0.1) {
+                if(!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+            playCorrect: function() {
+                this.init();
+                this.playTone(523.25, 'sine', 0.1, 0.2); // C5
+                setTimeout(() => this.playTone(659.25, 'sine', 0.1, 0.2), 100); // E5
+                setTimeout(() => this.playTone(783.99, 'sine', 0.3, 0.2), 200); // G5
+            },
+            playWrong: function() {
+                this.init();
+                this.playTone(300, 'sawtooth', 0.2, 0.2);
+                setTimeout(() => this.playTone(250, 'sawtooth', 0.4, 0.2), 150);
+            },
+            playJump: function() {
+                this.init();
+                if(!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            },
+            playSplash: function() {
+                this.init();
+                if(!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.5;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 1000;
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            },
+            toggleBGM: function() {
+                this.init();
+                const btn = document.getElementById('btn-audio');
+                if(this.isBgmPlaying) {
+                    clearInterval(this.bgmInterval);
+                    this.isBgmPlaying = false;
+                    if(btn) btn.innerHTML = '🔈 Audio OFF';
+                    if(btn) btn.classList.replace('bg-green-500', 'bg-gray-500');
+                } else {
+                    this.isBgmPlaying = true;
+                    if(btn) btn.innerHTML = '🔊 Audio ON';
+                    if(btn) btn.classList.replace('bg-gray-500', 'bg-green-500');
+                    
+                    // Simple procedural melody (Nature theme)
+                    const melody = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63]; // C E G C G E
+                    let noteIndex = 0;
+                    this.bgmInterval = setInterval(() => {
+                        this.playTone(melody[noteIndex], 'triangle', 0.4, 0.05);
+                        noteIndex = (noteIndex + 1) % melody.length;
+                    }, 500);
+                }
+            }
+        };
+    </script>
+
+    <!-- BANK SOAL -->
+    <script>
+        const questionBank = [
+            {
+                q: "🌱 Semua makhluk hidup dan benda tak hidup yang saling berinteraksi disebut ....",
+                opts: ["A. Populasi", "B. Komunitas", "C. Ekosistem", "D. Habitat"],
+                ans: 2, msg: "Hebat! Katakmu menemukan ekosistem yang sehat."
+            },
+            {
+                q: "🐇 Dalam rantai makanan berikut:\nRumput → Kelinci → Ular → Elang\nKelinci berperan sebagai ....",
+                opts: ["A. Produsen", "B. Konsumen I", "C. Konsumen II", "D. Pengurai"],
+                ans: 1, msg: "Lompatan super!"
+            },
+            {
+                q: "☀️ Sumber energi utama bagi kehidupan di bumi adalah ....",
+                opts: ["A. Air", "B. Angin", "C. Matahari", "D. Tanah"],
+                ans: 2, msg: "Katak memperoleh energi matahari!"
+            },
+            {
+                q: "🌳 Makhluk hidup yang dapat membuat makanan sendiri disebut ....",
+                opts: ["A. Konsumen", "B. Pengurai", "C. Produsen", "D. Predator"],
+                ans: 2, msg: "Katak mendapatkan daun energi."
+            },
+            {
+                q: "♻️ Berikut yang termasuk upaya menjaga lingkungan adalah ....",
+                opts: ["A. Membuang sampah ke sungai", "B. Menebang pohon sembarangan", "C. Membakar sampah plastik", "D. Menanam pohon"],
+                ans: 3, msg: "Katak menanam bibit pohon!"
+            },
+            {
+                q: "🐛 Hewan yang memakan tumbuhan disebut ....",
+                opts: ["A. Karnivora", "B. Herbivora", "C. Omnivora", "D. Predator"],
+                ans: 1, msg: "Katak bertemu ulat pemakan daun."
+            },
+            {
+                q: "🌧 Air hujan yang turun ke bumi merupakan bagian dari ....",
+                opts: ["A. Daur hidup", "B. Daur air", "C. Daur makanan", "D. Daur energi"],
+                ans: 1, msg: "Katak mendapat percikan air segar."
+            },
+            {
+                q: "🦅 Jika jumlah ular berkurang dalam rantai makanan, kemungkinan yang terjadi adalah ....",
+                opts: ["A. Kelinci bertambah", "B. Kelinci berkurang", "C. Rumput habis", "D. Elang bertambah"],
+                ans: 0, msg: "Lompatan cerdas!"
+            },
+            {
+                q: "🌍 Salah satu penyebab pemanasan global adalah ....",
+                opts: ["A. Menanam pohon", "B. Menghemat listrik", "C. Emisi kendaraan bermotor", "D. Mendaur ulang sampah"],
+                ans: 2, msg: "Katak berhasil menghindari daerah panas."
+            },
+            {
+                q: "🌿 Organisme yang bertugas menguraikan sisa makhluk hidup adalah ....",
+                opts: ["A. Produsen", "B. Konsumen", "C. Predator", "D. Pengurai"],
+                ans: 3, msg: "SELAMAT! Katak berhasil mencapai kolam kehidupan!"
+            }
+        ];
+    </script>
+
+    <!-- SVG GENERATORS -->
+    <script>
+        const SVGS = {
+            frogNormal: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-lg"><ellipse cx="50" cy="55" rx="40" ry="35" fill="#7bed9f"/><ellipse cx="50" cy="75" rx="45" ry="20" fill="#2ed573"/><circle cx="30" cy="35" r="15" fill="#7bed9f"/><circle cx="70" cy="35" r="15" fill="#7bed9f"/><circle cx="30" cy="35" r="8" fill="white"/><circle cx="70" cy="35" r="8" fill="white"/><circle cx="30" cy="35" r="4" fill="black"/><circle cx="70" cy="35" r="4" fill="black"/><path d="M 40 55 Q 50 65 60 55" stroke="#2f3542" stroke-width="3" fill="transparent" stroke-linecap="round"/><ellipse cx="25" cy="65" rx="6" ry="3" fill="#ff7f50" opacity="0.6"/><ellipse cx="75" cy="65" rx="6" ry="3" fill="#ff7f50" opacity="0.6"/></svg>`,
+            
+            frogHappy: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-lg"><ellipse cx="50" cy="55" rx="40" ry="35" fill="#7bed9f"/><ellipse cx="50" cy="75" rx="45" ry="20" fill="#2ed573"/><circle cx="30" cy="35" r="15" fill="#7bed9f"/><circle cx="70" cy="35" r="15" fill="#7bed9f"/><path d="M 22 35 Q 30 25 38 35" stroke="black" stroke-width="3" fill="transparent" stroke-linecap="round"/><path d="M 62 35 Q 70 25 78 35" stroke="black" stroke-width="3" fill="transparent" stroke-linecap="round"/><path d="M 35 55 Q 50 75 65 55 Z" fill="#ff4757" stroke="#2f3542" stroke-width="2"/><ellipse cx="25" cy="60" rx="8" ry="5" fill="#ff7f50" opacity="0.8"/><ellipse cx="75" cy="60" rx="8" ry="5" fill="#ff7f50" opacity="0.8"/></svg>`,
+            
+            frogSad: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-lg"><ellipse cx="50" cy="55" rx="40" ry="35" fill="#57606f"/><ellipse cx="50" cy="75" rx="45" ry="20" fill="#2f3542"/><circle cx="30" cy="35" r="15" fill="#57606f"/><circle cx="70" cy="35" r="15" fill="#57606f"/><circle cx="30" cy="35" r="8" fill="white"/><circle cx="70" cy="35" r="8" fill="white"/><circle cx="30" cy="38" r="4" fill="black"/><circle cx="70" cy="38" r="4" fill="black"/><path d="M 40 65 Q 50 55 60 65" stroke="#2f3542" stroke-width="3" fill="transparent" stroke-linecap="round"/><circle cx="28" cy="45" r="3" fill="#70a1ff"/><circle cx="72" cy="45" r="3" fill="#70a1ff"/></svg>`,
+            
+            lilyPad: `<svg viewBox="0 0 100 50" class="lily-pad drop-shadow-md"><path d="M 50 5 C 80 5 95 20 95 25 C 95 30 80 45 50 45 C 20 45 5 30 5 25 C 5 20 20 5 50 5 Z M 50 25 L 5 25" fill="#2ed573" stroke="#2f3542" stroke-width="2"/><path d="M 45 5 L 50 25 L 55 5 Z" fill="#1e272e" opacity="0.2"/></svg>`
+        };
+    </script>
+
+    <!-- SCREENS -->
+    
+    <!-- MAIN MENU -->
+    <div id="screen-menu" class="absolute inset-0 bg-gradient-to-b from-blue-300 to-green-400 flex flex-col items-center justify-center p-4 z-40 transition-opacity duration-500">
+        <!-- Decor -->
+        <div class="absolute top-10 left-10 w-24 h-24 animate-float opacity-80" id="menu-cloud-1">
+            <svg viewBox="0 0 100 50" fill="white"><path d="M 20 30 A 15 15 0 0 1 50 20 A 20 20 0 0 1 90 30 A 10 10 0 0 1 90 50 L 20 50 A 10 10 0 0 1 20 30 Z"/></svg>
+        </div>
+        <div class="absolute top-20 right-10 w-32 h-32 animate-float-delay-1 opacity-80" id="menu-cloud-2">
+            <svg viewBox="0 0 100 50" fill="white"><path d="M 20 30 A 15 15 0 0 1 50 20 A 20 20 0 0 1 90 30 A 10 10 0 0 1 90 50 L 20 50 A 10 10 0 0 1 20 30 Z"/></svg>
+        </div>
+
+        <div class="bg-white/90 p-8 rounded-3xl shadow-2xl border-4 border-green-500 text-center max-w-lg w-full relative z-10 animate-bounce-soft" style="animation-iteration-count: 1;">
+            <div class="w-32 h-32 mx-auto mb-[-20px] z-20 relative animate-float">
+                <script>document.write(SVGS.frogHappy)</script>
+            </div>
+            <h1 class="text-4xl md:text-5xl text-green-600 mb-2 font-display drop-shadow-md">GAME KATAK<br>INTERAKTIF IPAS</h1>
+            <h2 class="text-xl md:text-2xl text-blue-500 font-bold mb-1">Petualangan Katak Menjelajahi Ekosistem</h2>
+            <p class="text-sm text-gray-500 mb-6 bg-gray-100 inline-block px-3 py-1 rounded-full border border-gray-200">Kelas 5 SD • Dibuat oleh Nopa Hartomo</p>
+
+            <div class="space-y-3 mb-6">
+                <button onclick="Game.start(1)" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-6 rounded-2xl text-xl shadow-[0_5px_0_#27ae60] active:shadow-[0_0px_0_#27ae60] active:translate-y-[5px] transition-all flex items-center justify-center gap-2">
+                    🟢 SOLO MODE (1 Pemain)
+                </button>
+                <button onclick="Game.start(2)" class="w-full bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-4 px-6 rounded-2xl text-xl shadow-[0_5px_0_#f39c12] active:shadow-[0_0px_0_#f39c12] active:translate-y-[5px] transition-all flex items-center justify-center gap-2">
+                    🟡 DUEL MODE (2 Pemain)
+                </button>
+                <button onclick="Game.start(3)" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-6 rounded-2xl text-xl shadow-[0_5px_0_#2980b9] active:shadow-[0_0px_0_#2980b9] active:translate-y-[5px] transition-all flex items-center justify-center gap-2">
+                    🔵 TRIPLE MODE (3 Pemain)
+                </button>
+            </div>
+
+            <div class="flex justify-center gap-4 text-sm font-bold">
+                <button id="btn-audio" onclick="AudioSys.toggleBGM()" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-xl shadow">
+                    🔈 Audio OFF
+                </button>
+                <button onclick="toggleFullscreen()" class="bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded-xl shadow">
+                    ⛶ Full Screen
+                </button>
+                <button onclick="document.getElementById('modal-petunjuk').classList.add('active')" class="bg-gray-800 hover:bg-black text-white py-2 px-4 rounded-xl shadow">
+                    ℹ Petunjuk
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME CONTAINER (Dynamic Grid) -->
+    <div id="game-container" class="hidden">
+        <!-- Injected via JS based on mode -->
+    </div>
+
+    <!-- RESULT SCREEN -->
+    <div id="screen-result" class="hidden absolute inset-0 bg-gradient-to-t from-blue-600 to-purple-600 flex flex-col items-center justify-center p-4 z-50 overflow-y-auto">
+        <div id="confetti-container" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+        <h1 class="text-5xl md:text-7xl text-yellow-300 font-display mb-2 drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)] animate-bounce-soft">🏆 SELAMAT! 🏆</h1>
+        <h2 class="text-xl md:text-3xl text-white font-bold mb-8 text-center px-4">Katak berhasil mencapai Kolam Kehidupan</h2>
+        
+        <div id="result-cards" class="flex flex-wrap justify-center gap-6 mb-8 w-full max-w-6xl">
+            <!-- Injected via JS -->
+        </div>
+
+        <div class="flex gap-4">
+            <button onclick="Game.resetToMenu()" class="bg-white text-blue-600 hover:bg-gray-100 font-bold py-4 px-8 rounded-2xl text-xl shadow-[0_5px_0_#d1d8e0] active:translate-y-[5px] active:shadow-none transition-all flex items-center gap-2">
+                🏠 Ke Home
+            </button>
+            <button onclick="Game.start(Game.currentMode)" class="bg-green-500 text-white hover:bg-green-600 font-bold py-4 px-8 rounded-2xl text-xl shadow-[0_5px_0_#27ae60] active:translate-y-[5px] active:shadow-none transition-all flex items-center gap-2">
+                🔄 Main Lagi
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL PETUNJUK -->
+    <div id="modal-petunjuk" class="modal">
+        <div class="bg-white p-6 rounded-2xl max-w-md w-[90%] border-4 border-blue-500 transform scale-100 transition-transform">
+            <h2 class="text-2xl font-display text-blue-600 mb-4 border-b-2 pb-2">ℹ Petunjuk Bermain</h2>
+            <ul class="space-y-3 text-gray-700 text-sm md:text-base font-bold">
+                <li>🐸 Pilih mode bermain: Solo (1P), Duel (2P), atau Triple (3P).</li>
+                <li>📝 Baca soal IPAS yang muncul di bagian atas layar.</li>
+                <li>🍃 Klik pada daun teratai (A, B, C, D) yang berisi jawaban benar.</li>
+                <li>✅ Jika Benar: Katak melompat senang, dapat skor +10.</li>
+                <li>❌ Jika Salah: Katak jatuh ke air, skor +0, cuaca mendung.</li>
+                <li>🏆 Selesaikan 10 level untuk melihat hasil akhir!</li>
+            </ul>
+            <button onclick="document.getElementById('modal-petunjuk').classList.remove('active')" class="mt-6 w-full bg-blue-500 text-white py-3 rounded-xl font-bold hover:bg-blue-600">Tutup</button>
+        </div>
+    </div>
+
+    <!-- GAME LOGIC -->
+    <script>
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                });
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        const Game = {
+            currentMode: 1,
+            players: [],
+            currentLevel: 0,
+            maxLevel: 10,
+            
+            start: function(mode) {
+                AudioSys.init();
+                this.currentMode = mode;
+                this.players = [];
+                for(let i=0; i<mode; i++) {
+                    this.players.push({
+                        id: i,
+                        name: mode === 1 ? 'Player' : `Player ${i+1}`,
+                        color: i===0 ? 'green' : i===1 ? 'yellow' : 'blue',
+                        score: 0,
+                        correct: 0,
+                        wrong: 0,
+                        hasAnsweredCurrent: false,
+                        frogState: 'normal' // normal, happy, sad
+                    });
+                }
+                this.currentLevel = 0;
+                
+                document.getElementById('screen-menu').classList.add('hidden');
+                document.getElementById('screen-result').classList.add('hidden');
+                const container = document.getElementById('game-container');
+                container.classList.remove('hidden');
+                
+                // Setup Grid dynamically
+                container.style.gridTemplateColumns = `repeat(${mode}, 1fr)`;
+                
+                this.buildPlayAreas();
+                this.renderLevel();
+            },
+
+            buildPlayAreas: function() {
+                const container = document.getElementById('game-container');
+                container.innerHTML = '';
+                
+                this.players.forEach(p => {
+                    const col = document.createElement('div');
+                    col.className = `player-col env-normal flex flex-col`;
+                    col.id = `player-col-${p.id}`;
+                    
+                    let bgImg = '';
+                    if(p.color === 'green') bgImg = 'from-green-400 to-green-600';
+                    if(p.color === 'yellow') bgImg = 'from-yellow-400 to-yellow-600';
+                    if(p.color === 'blue') bgImg = 'from-blue-400 to-blue-600';
+
+                    col.innerHTML = `
+                        <!-- Top Bar -->
+                        <div class="bg-gradient-to-r ${bgImg} text-white p-2 md:p-4 shadow-lg z-30 flex justify-between items-center">
+                            <div class="font-display text-lg md:text-2xl drop-shadow">🐸 ${p.name}</div>
+                            <div class="text-right">
+                                <div class="font-bold text-sm md:text-lg">🏆 Lvl: <span id="lvl-${p.id}">1</span>/10</div>
+                                <div class="font-bold text-sm md:text-lg text-yellow-200">⭐ <span id="score-${p.id}">0</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="w-full bg-gray-700 h-2">
+                            <div id="progress-${p.id}" class="bg-yellow-400 h-2 transition-all duration-500" style="width: 0%"></div>
+                        </div>
+
+                        <!-- Question Area -->
+                        <div class="p-2 md:p-4 z-30 flex-shrink-0">
+                            <div class="glass-panel p-3 md:p-5 rounded-2xl relative">
+                                <p id="q-text-${p.id}" class="text-sm md:text-lg font-bold text-gray-800 leading-snug"></p>
+                                <div id="msg-${p.id}" class="absolute -bottom-4 left-1/2 transform -translate-x-1/2 bg-white px-4 py-1 rounded-full text-xs font-bold shadow-md hidden whitespace-nowrap z-40 text-center border-2"></div>
+                            </div>
+                        </div>
+
+                        <!-- Play Area (Lily Pads) -->
+                        <div class="flex-grow relative z-20 overflow-hidden flex flex-col justify-center gap-2 p-2" id="pads-area-${p.id}">
+                            <!-- Pads injected here -->
+                        </div>
+
+                        <!-- Environmental Effects Container -->
+                        <div id="env-effects-${p.id}" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+                        <!-- Frog -->
+                        <div id="frog-${p.id}" class="frog-container">
+                            ${SVGS.frogNormal}
+                        </div>
+                    `;
+                    container.appendChild(col);
+                });
+            },
+
+            renderLevel: function() {
+                if(this.currentLevel >= this.maxLevel) {
+                    this.showResults();
+                    return;
+                }
+
+                const qData = questionBank[this.currentLevel];
+                
+                this.players.forEach(p => {
+                    p.hasAnsweredCurrent = false;
+                    document.getElementById(`lvl-${p.id}`).innerText = this.currentLevel + 1;
+                    document.getElementById(`progress-${p.id}`).style.width = `${((this.currentLevel) / this.maxLevel) * 100}%`;
+                    document.getElementById(`q-text-${p.id}`).innerText = qData.q;
+                    document.getElementById(`msg-${p.id}`).classList.add('hidden');
+                    
+                    // Reset Frog and Environment
+                    this.updateFrogVisual(p.id, 'normal');
+                    const col = document.getElementById(`player-col-${p.id}`);
+                    col.classList.remove('env-rainy');
+                    col.classList.add('env-normal');
+                    document.getElementById(`env-effects-${p.id}`).innerHTML = '';
+                    
+                    const frogEl = document.getElementById(`frog-${p.id}`);
+                    frogEl.style.transform = `translateX(-50%)`;
+                    frogEl.classList.remove('is-jumping', 'is-falling', 'hidden');
+                    frogEl.style.opacity = '1';
+
+                    // Generate Pads
+                    const padsArea = document.getElementById(`pads-area-${p.id}`);
+                    padsArea.innerHTML = '';
+                    
+                    qData.opts.forEach((opt, index) => {
+                        const isCorrect = index === qData.ans;
+                        // Stagger layout for pads
+                        const align = index % 2 === 0 ? 'items-start ml-4 md:ml-10' : 'items-end mr-4 md:mr-10';
+                        const delay = `animate-float-delay-${index % 3}`;
+                        
+                        const padWrap = document.createElement('div');
+                        padWrap.className = `flex flex-col ${align} w-full relative mb-1 md:mb-2`;
+                        
+                        padWrap.innerHTML = `
+                            <div class="relative w-3/4 md:w-2/3 h-16 md:h-20 animate-float ${delay}">
+                                ${SVGS.lilyPad}
+                                <button id="btn-${p.id}-${index}" onclick="Game.handleAnswer(${p.id}, ${index}, ${isCorrect}, this)" class="answer-btn absolute inset-0 flex items-center justify-center p-2 m-2 bg-white/90 border-2 border-gray-300 rounded-xl font-bold text-xs md:text-sm shadow-lg z-20 text-center break-words text-gray-800">
+                                    ${opt}
+                                </button>
+                            </div>
+                        `;
+                        padsArea.appendChild(padWrap);
+                    });
+                });
+            },
+
+            updateFrogVisual: function(pId, state) {
+                const el = document.getElementById(`frog-${pId}`);
+                if(!el) return;
+                if(state === 'normal') el.innerHTML = SVGS.frogNormal;
+                else if(state === 'happy') el.innerHTML = SVGS.frogHappy;
+                else if(state === 'sad') el.innerHTML = SVGS.frogSad;
+            },
+
+            handleAnswer: function(pId, optIndex, isCorrect, btnEl) {
+                const player = this.players.find(p => p.id === pId);
+                if(player.hasAnsweredCurrent) return; // Prevent double click
+                player.hasAnsweredCurrent = true;
+
+                // Disable all buttons for this player
+                const padsArea = document.getElementById(`pads-area-${pId}`);
+                padsArea.querySelectorAll('.answer-btn').forEach(b => {
+                    b.disabled = true;
+                    b.style.opacity = '0.7';
+                });
+                btnEl.style.opacity = '1';
+
+                const frogEl = document.getElementById(`frog-${pId}`);
+                
+                // Calculate Jump trajectory
+                const btnRect = btnEl.getBoundingClientRect();
+                const frogRect = frogEl.getBoundingClientRect();
+                const colRect = document.getElementById(`player-col-${pId}`).getBoundingClientRect();
+                
+                // Relative coordinates within the column
+                const targetX = (btnRect.left + btnRect.width/2) - (colRect.left + colRect.width/2);
+                const targetY = (btnRect.top + btnRect.height/2) - (frogRect.top + frogRect.height);
+
+                frogEl.style.setProperty('--jump-x', `${targetX}px`);
+                frogEl.style.setProperty('--jump-y', `${targetY}px`);
+                
+                AudioSys.playJump();
+                frogEl.classList.add('is-jumping');
+
+                setTimeout(() => {
+                    frogEl.classList.remove('is-jumping');
+                    // Lock frog to the pad position temporarily
+                    frogEl.style.transform = `translate(calc(-50% + ${targetX}px), ${targetY}px)`;
+                    
+                    if(isCorrect) {
+                        this.processCorrect(player, btnEl);
+                    } else {
+                        this.processWrong(player, btnEl);
+                    }
+
+                    // Check if all players answered
+                    if(this.players.every(p => p.hasAnsweredCurrent)) {
+                        setTimeout(() => {
+                            this.currentLevel++;
+                            this.renderLevel();
+                        }, 2500); // Wait for effects before next level
+                    }
+
+                }, 600); // Matches CSS jump duration
+            },
+
+            processCorrect: function(player, btnEl) {
+                AudioSys.playCorrect();
+                player.score += 10;
+                player.correct++;
+                document.getElementById(`score-${player.id}`).innerText = player.score;
+                
+                this.updateFrogVisual(player.id, 'happy');
+                btnEl.classList.add('correct');
+                
+                // Show hearts
+                this.createParticles(player.id, 'heart', 5);
+                
+                // Message
+                const msgEl = document.getElementById(`msg-${player.id}`);
+                msgEl.innerText = questionBank[this.currentLevel].msg;
+                msgEl.classList.remove('hidden');
+                msgEl.classList.add('text-green-600', 'border-green-500');
+                msgEl.classList.remove('text-red-600', 'border-red-500');
+            },
+
+            processWrong: function(player, btnEl) {
+                AudioSys.playWrong();
+                player.wrong++;
+                this.updateFrogVisual(player.id, 'sad');
+                btnEl.classList.add('wrong');
+                
+                // Message
+                const msgArr = ["Yuk coba lagi!", "Masih semangat!", "Tetap fokus!"];
+                const msgEl = document.getElementById(`msg-${player.id}`);
+                msgEl.innerText = msgArr[Math.floor(Math.random() * msgArr.length)];
+                msgEl.classList.remove('hidden');
+                msgEl.classList.add('text-red-600', 'border-red-500');
+                msgEl.classList.remove('text-green-600', 'border-green-500');
+
+                // Fall animation
+                const frogEl = document.getElementById(`frog-${player.id}`);
+                setTimeout(() => {
+                    frogEl.classList.add('is-falling');
+                    setTimeout(() => {
+                        AudioSys.playSplash();
+                        this.createParticles(player.id, 'splash', 1);
+                        
+                        // Change Environment
+                        const col = document.getElementById(`player-col-${player.id}`);
+                        col.classList.remove('env-normal');
+                        col.classList.add('env-rainy');
+                        this.createParticles(player.id, 'rain', 30);
+                        
+                    }, 400); // mid-fall
+                }, 500);
+            },
+
+            createParticles: function(pId, type, count) {
+                const container = document.getElementById(`env-effects-${pId}`);
+                if(type === 'heart') {
+                    const frogEl = document.getElementById(`frog-${pId}`);
+                    const rect = frogEl.getBoundingClientRect();
+                    const colRect = document.getElementById(`player-col-${pId}`).getBoundingClientRect();
+                    const x = rect.left - colRect.left + rect.width/2;
+                    const y = rect.top - colRect.top;
+
+                    for(let i=0; i<count; i++) {
+                        const heart = document.createElement('div');
+                        heart.innerHTML = '❤️';
+                        heart.className = 'heart-particle';
+                        heart.style.left = `${x + (Math.random()*40 - 20)}px`;
+                        heart.style.top = `${y}px`;
+                        heart.style.animationDelay = `${Math.random()*0.3}s`;
+                        container.appendChild(heart);
+                    }
+                } else if(type === 'splash') {
+                    const frogEl = document.getElementById(`frog-${pId}`);
+                    // get current transformed position roughly
+                    const splash = document.createElement('div');
+                    splash.className = 'splash-ring';
+                    splash.style.width = '50px';
+                    splash.style.height = '20px';
+                    splash.style.left = '50%';
+                    splash.style.bottom = '10%'; // estimate pond hit
+                    splash.style.transform = 'translateX(-50%)';
+                    container.appendChild(splash);
+                } else if(type === 'rain') {
+                    for(let i=0; i<count; i++) {
+                        const drop = document.createElement('div');
+                        drop.className = 'rain-drop';
+                        drop.style.left = `${Math.random() * 100}%`;
+                        drop.style.animationDelay = `${Math.random() * 0.7}s`;
+                        container.appendChild(drop);
+                    }
+                }
+            },
+
+            showResults: function() {
+                document.getElementById('game-container').classList.add('hidden');
+                const resScreen = document.getElementById('screen-result');
+                resScreen.classList.remove('hidden');
+                
+                const cardsContainer = document.getElementById('result-cards');
+                cardsContainer.innerHTML = '';
+
+                // Create Confetti
+                const confContainer = document.getElementById('confetti-container');
+                confContainer.innerHTML = '';
+                const colors = ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71', '#9b59b6'];
+                for(let i=0; i<100; i++) {
+                    const conf = document.createElement('div');
+                    conf.style.position = 'absolute';
+                    conf.style.width = '10px';
+                    conf.style.height = '10px';
+                    conf.style.backgroundColor = colors[Math.floor(Math.random()*colors.length)];
+                    conf.style.left = `${Math.random()*100}%`;
+                    conf.style.top = `-10px`;
+                    conf.style.opacity = Math.random() + 0.5;
+                    conf.style.transform = `rotate(${Math.random()*360}deg)`;
+                    
+                    const duration = Math.random() * 3 + 2;
+                    conf.style.transition = `top ${duration}s linear, transform ${duration}s ease-in-out`;
+                    
+                    confContainer.appendChild(conf);
+                    
+                    setTimeout(() => {
+                        conf.style.top = `110%`;
+                        conf.style.transform = `rotate(${Math.random()*720}deg)`;
+                    }, 50);
+                }
+
+                // Generate Cards
+                this.players.forEach(p => {
+                    const percentage = Math.round((p.correct / this.maxLevel) * 100);
+                    let titleColor = p.color === 'green' ? 'text-green-600' : p.color === 'yellow' ? 'text-yellow-600' : 'text-blue-600';
+                    let borderColor = p.color === 'green' ? 'border-green-500' : p.color === 'yellow' ? 'border-yellow-400' : 'border-blue-500';
+
+                    const card = document.createElement('div');
+                    card.className = `bg-white rounded-3xl p-6 shadow-2xl border-b-8 ${borderColor} flex flex-col items-center w-full md:w-80 animate-bounce-soft`;
+                    card.style.animationIterationCount = '1';
+                    
+                    card.innerHTML = `
+                        <div class="w-24 h-24 mb-2">${SVGS.frogHappy}</div>
+                        <h3 class="text-3xl font-display ${titleColor} mb-4">${p.name}</h3>
+                        
+                        <div class="w-full bg-gray-100 rounded-xl p-4 space-y-2">
+                            <div class="flex justify-between items-center border-b pb-2">
+                                <span class="font-bold text-gray-600">Skor Akhir:</span>
+                                <span class="text-2xl font-black text-yellow-500">${p.score}</span>
+                            </div>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="font-bold text-green-600">✅ Benar:</span>
+                                <span class="font-bold text-gray-800">${p.correct}</span>
+                            </div>
+                            <div class="flex justify-between items-center text-sm border-b pb-2">
+                                <span class="font-bold text-red-500">❌ Salah:</span>
+                                <span class="font-bold text-gray-800">${p.wrong}</span>
+                            </div>
+                            <div class="flex justify-between items-center pt-2">
+                                <span class="font-bold text-gray-600">Akurasi:</span>
+                                <span class="text-xl font-black text-blue-500">${percentage}%</span>
+                            </div>
+                        </div>
+                    `;
+                    cardsContainer.appendChild(card);
+                });
+            },
+
+            resetToMenu: function() {
+                document.getElementById('screen-result').classList.add('hidden');
+                document.getElementById('game-container').classList.add('hidden');
+                document.getElementById('screen-menu').classList.remove('hidden');
+            }
+        };
+    </script>
+</body>
+</html>
